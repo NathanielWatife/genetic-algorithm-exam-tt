@@ -19,9 +19,15 @@ co_file = st.sidebar.file_uploader("Upload Carryover Courses CSV", type="csv")
 
 weeks = st.sidebar.selectbox("Number of exam weeks (Mon–Fri)", [1, 2, 3], index=1)
 generate_btn = st.sidebar.button("Generate Timetable")
+
 exam_days = weeks * 5
 
-if all([cs_file, ist_file, cyb_file, co_file]) and generate_btn:
+# Helper to check if all files are uploaded
+def all_files_uploaded():
+    return all([cs_file, ist_file, cyb_file, co_file])
+
+# Regenerate timetable if button is pressed
+if generate_btn and all_files_uploaded():
     cs_df = pd.read_csv(cs_file)
     ist_df = pd.read_csv(ist_file)
     cyb_df = pd.read_csv(cyb_file)
@@ -31,7 +37,7 @@ if all([cs_file, ist_file, cyb_file, co_file]) and generate_btn:
     all_courses_df["units"] = all_courses_df["units"].astype(int)
     all_courses_df["course"] = all_courses_df["course"].str.strip().str.lower()
     all_courses_df = all_courses_df.reset_index(drop=True)
-    all_courses = all_courses_df.to_dict(orient="records")  # List of dicts
+    all_courses = all_courses_df.to_dict(orient="records")
     course_list = list(range(len(all_courses)))
 
     unique_units = sorted(set(row["units"] for row in all_courses))
@@ -57,7 +63,6 @@ if all([cs_file, ist_file, cyb_file, co_file]) and generate_btn:
             levels += [i for i in LEVELS if i > level]
         course_levels[course] = levels
 
-    # === Conflict Map ===
     conflict_map = {i: set() for i in course_list}
     for i in course_list:
         ci = all_courses[i]
@@ -96,9 +101,37 @@ if all([cs_file, ist_file, cyb_file, co_file]) and generate_btn:
 
     pivot_table = timetable_df.copy()
     pivot_table["Slot"] = pivot_table["Start Time"] + "-" + pivot_table["End Time"]
-    pivot_table["Info"] = pivot_table["Course"] + " (" + pivot_table["Department"] + ", Lvl " + pivot_table[
-        "Level"].astype(str) + ")"
+    pivot_table["Info"] = pivot_table["Course"] + " (" + pivot_table["Department"] + ", Lvl " + pivot_table["Level"].astype(str) + ")"
     pivoted = pivot_table.pivot_table(index="Slot", columns="Day", values="Info", aggfunc=lambda x: '\n'.join(x))
+
+    # Store in session state
+    st.session_state["timetable_df"] = timetable_df
+    st.session_state["pivoted"] = pivoted
+    st.session_state["departments"] = timetable_df["Department"].unique()
+    st.session_state["dept_pivoted"] = {
+        dept: timetable_df[timetable_df["Department"] == dept]
+        .assign(Slot=lambda df: df["Start Time"] + "-" + df["End Time"])
+        .assign(Info=lambda df: df["Course"] + " (Lvl " + df["Level"].astype(str) + ")")
+        .pivot_table(index="Slot", columns="Day", values="Info", aggfunc=lambda x: "\n".join(x))
+        for dept in timetable_df["Department"].unique()
+    }
+    st.session_state["summary"] = {
+        "total_courses": len(all_courses),
+        "total_days": exam_days,
+        "unique_slots": len(slots),
+        "fitness": best.fitness,
+        "hard_conflicts": best.hard_conflicts,
+        "soft_conflicts": best.soft_conflicts
+    }
+    st.session_state["generated"] = True
+
+# Display timetable if generated
+if st.session_state.get("generated", False):
+    timetable_df = st.session_state["timetable_df"]
+    pivoted = st.session_state["pivoted"]
+    departments = st.session_state["departments"]
+    dept_pivoted = st.session_state["dept_pivoted"]
+    summary = st.session_state["summary"]
 
     st.subheader("\U0001F4C4 Download Timetable")
     st.dataframe(pivoted.fillna(""))
@@ -106,36 +139,25 @@ if all([cs_file, ist_file, cyb_file, co_file]) and generate_btn:
     st.download_button("Download CSV Timetable", csv, file_name="exam_timetable.csv", mime="text/csv")
 
     st.subheader("\U0001F4CA Summary Stats")
-    st.markdown(f"- Total Courses: **{len(all_courses)}**")
-    st.markdown(f"- Total Days: **{exam_days}**")
-    st.markdown(f"- Unique Time Slots: **{len(slots)}**")
-    st.markdown(f"- Final Fitness Score: **{best.fitness}**")
+    st.markdown(f"- Total Courses: **{summary['total_courses']}**")
+    st.markdown(f"- Total Days: **{summary['total_days']}**")
+    st.markdown(f"- Unique Time Slots: **{summary['unique_slots']}**")
+    st.markdown(f"- Final Fitness Score: **{summary['fitness']}**")
 
     st.markdown("### 🧠 Interpretation")
-    if best.hard_conflicts == 0 and best.soft_conflicts == 0:
+    if summary["hard_conflicts"] == 0 and summary["soft_conflicts"] == 0:
         st.success("✅ No hard or soft conflicts. Timetable is fully optimized!")
     else:
         st.info(f"""
-    - **Hard Conflicts**: {best.hard_conflicts} (overlapping exams)
-    - **Soft Conflicts**: {best.soft_conflicts} (e.g., exams scheduled with <30 mins gap)
+    - **Hard Conflicts**: {summary['hard_conflicts']} (overlapping exams)
+    - **Soft Conflicts**: {summary['soft_conflicts']} (e.g., exams scheduled with <30 mins gap)
     - Timetable is **feasible** and can be improved if needed.
     """)
 
     st.subheader("📚 Department-Specific Timetables")
-    departments = timetable_df["Department"].unique()
     for dept in sorted(departments):
         st.markdown(f"### 🏛️ {dept} Department")
-        dept_df = timetable_df[timetable_df["Department"] == dept].copy()
-        dept_df["Slot"] = dept_df["Start Time"] + "-" + dept_df["End Time"]
-        dept_df["Info"] = (
-                dept_df["Course"]
-                + " (Lvl "
-                + dept_df["Level"].astype(str)
-                + ")"
-        )
-        pivoted_dept = dept_df.pivot_table(
-            index="Slot", columns="Day", values="Info", aggfunc=lambda x: "\n".join(x)
-        )
+        pivoted_dept = dept_pivoted[dept]
         st.dataframe(pivoted_dept.fillna(""))
         csv_dept = pivoted_dept.to_csv(index=True).encode("utf-8")
         st.download_button(
@@ -144,3 +166,5 @@ if all([cs_file, ist_file, cyb_file, co_file]) and generate_btn:
             file_name=f"{dept.lower().replace(' ', '_')}_timetable.csv",
             mime="text/csv",
         )
+else:
+    st.info("Upload all required CSVs and click **Generate Timetable** to begin.")
