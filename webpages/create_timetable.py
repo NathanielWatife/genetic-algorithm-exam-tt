@@ -4,7 +4,7 @@ from utils import *
 st.set_page_config(page_title="Exam Timetable Generator",
                    page_icon="\U0001F4D8",
                    layout="wide")
-st.title("FIRE")
+
 st.markdown(f"""
 <img src="data:image/jpeg;base64,{open_picture('noun (2).png')}" width="10%"><br>
 """, unsafe_allow_html=True)
