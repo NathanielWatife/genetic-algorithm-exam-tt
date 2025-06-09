@@ -1,13 +1,13 @@
 import streamlit as st
 from utils import open_picture
-
+st.title("FIRE)")
 st.set_page_config(page_title="Exam Timetable Generator - Home",
                    page_icon="",
                    layout="wide")
 
-st.markdown(f"""
-<img src="data:image/jpeg;base64,{open_picture('noun (2).png')}" width="20%"><br>
-""", unsafe_allow_html=True)
+# st.markdown(f"""
+# <img src="data:image/jpeg;base64,{open_picture('noun (2).png')}" width="20%"><br>
+# """, unsafe_allow_html=True)
 
 st.header("Welcome to the Exam Timetable Generator")
 
