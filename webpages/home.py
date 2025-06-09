@@ -2,7 +2,7 @@ import streamlit as st
 from utils import open_picture
 
 st.set_page_config(page_title="Exam Timetable Generator - Home",
-                   page_icon="",
+                   page_icon="🗣",
                    layout="wide")
 
 st.markdown(f"""
