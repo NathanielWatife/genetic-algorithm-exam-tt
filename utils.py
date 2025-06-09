@@ -91,7 +91,7 @@ class Chromosome:
         slot_usage = {}
 
         for idx, slot in self.assignments.items():
-            row = all_courses.loc[idx]
+            row = all_courses[idx]
             course = row["course"]
             department = row["department"]
             start_min, end_min = slot_time_cache[slot]
@@ -165,7 +165,8 @@ def generate_initial_population(pop_size, all_courses, slots, slot_time_cache, c
     for _ in range(pop_size):
         assignments = {}
         used_slots = {}
-        for idx, row in all_courses.iterrows():
+        for idx in course_list:
+            row = all_courses[idx]
             course = row["course"]
             dept = row["department"]
             possible_slots = [s for s in slots if s[3] == row["units"]]
@@ -216,7 +217,7 @@ def calculate_population_fitness(population, all_courses, slot_time_cache, cours
     Returns:
         None
     """
-    with ThreadPoolExecutor(max_workers=max(2, os.cpu_count() // 2)) as executor:
+    with ThreadPoolExecutor(max_workers=2) as executor:
         list(executor.map(lambda c: c.calculate_fitness(all_courses, slot_time_cache, course_levels), population))
 
 
@@ -255,16 +256,20 @@ def mutate(chromo, mutation_rate, all_courses, slots, slot_time_cache, course_le
     Returns:
         None
     """
+    mutated = False
     for idx in course_list:
         if random.random() < mutation_rate:
-            row = all_courses.loc[idx]
+            row = all_courses[idx]
             units = row["units"]
             possible_slots = [s for s in slots if s[3] == units]
             random.shuffle(possible_slots)
             for slot in possible_slots:
                 if not is_slot_conflict(idx, slot, chromo.assignments, slot_time_cache, conflict_map):
                     chromo.assignments[idx] = slot
+                    mutated = True
                     break
+    if mutated:
+        chromo.calculate_fitness(all_courses, slot_time_cache, course_levels)
 
 
 def repair(chromo, all_courses, slots, slot_time_cache, course_levels, conflict_map):
@@ -282,8 +287,9 @@ def repair(chromo, all_courses, slots, slot_time_cache, course_levels, conflict_
     Returns:
         None
     """
+    repaired = False
     for idx, slot in list(chromo.assignments.items()):
-        row = all_courses.loc[idx]
+        row = all_courses[idx]
         course = row["course"]
         units = row["units"]
         for j in conflict_map[idx]:
@@ -300,9 +306,10 @@ def repair(chromo, all_courses, slots, slot_time_cache, course_levels, conflict_
                 for new_slot in possible_slots:
                     if not is_slot_conflict(idx, new_slot, chromo.assignments, slot_time_cache, conflict_map):
                         chromo.assignments[idx] = new_slot
+                        repaired = True
                         break
-    # Recalculate fitness after repair
-    chromo.calculate_fitness(all_courses, slot_time_cache, course_levels)
+    if repaired:
+        chromo.calculate_fitness(all_courses, slot_time_cache, course_levels)
 
 
 def genetic_algorithm(
@@ -337,8 +344,9 @@ def genetic_algorithm(
             child = crossover(p1, p2, course_list)
             mutate(child, mutation_rate, all_courses, slots, slot_time_cache, course_levels, conflict_map, course_list)
             repair(child, all_courses, slots, slot_time_cache, course_levels, conflict_map)
+            if child.fitness is None:
+                child.calculate_fitness(all_courses, slot_time_cache, course_levels)
             next_gen.append(child)
-        calculate_population_fitness(next_gen, all_courses, slot_time_cache, course_levels)
         population = next_gen
         progress_bar.progress((gen + 1) / generations)
         status_text.text(f"Generation {gen + 1}/{generations} | Best fitness: {population[0].fitness}")
