@@ -27,13 +27,14 @@ if all([cs_file, ist_file, cyb_file, co_file]) and generate_btn:
     cyb_df = pd.read_csv(cyb_file)
     co_df = pd.read_csv(co_file)
 
-    all_courses = pd.concat([cs_df, ist_df, cyb_df], ignore_index=True)
-    all_courses["units"] = all_courses["units"].astype(int)
-    all_courses["course"] = all_courses["course"].str.strip().str.lower()
-    all_courses = all_courses.reset_index(drop=True)
-    course_list = all_courses.index.tolist()
+    all_courses_df = pd.concat([cs_df, ist_df, cyb_df], ignore_index=True)
+    all_courses_df["units"] = all_courses_df["units"].astype(int)
+    all_courses_df["course"] = all_courses_df["course"].str.strip().str.lower()
+    all_courses_df = all_courses_df.reset_index(drop=True)
+    all_courses = all_courses_df.to_dict(orient="records")  # List of dicts
+    course_list = list(range(len(all_courses)))
 
-    unique_units = sorted(all_courses["units"].unique())
+    unique_units = sorted(set(row["units"] for row in all_courses))
     slot_cache = {u: get_time_slots(u) for u in unique_units}
     slots = []
     slot_time_cache = {}
@@ -48,7 +49,7 @@ if all([cs_file, ist_file, cyb_file, co_file]) and generate_btn:
     LEVELS = [100, 200, 300, 400]
     co_courses = set(co_df[co_df["is_carryover"] == True]["course"].str.strip().str.lower())
     course_levels = {}
-    for idx, row in all_courses.iterrows():
+    for idx, row in enumerate(all_courses):
         course = row["course"]
         level = int(row["level"])
         levels = [level]
@@ -59,11 +60,11 @@ if all([cs_file, ist_file, cyb_file, co_file]) and generate_btn:
     # === Conflict Map ===
     conflict_map = {i: set() for i in course_list}
     for i in course_list:
-        ci = all_courses.loc[i]
+        ci = all_courses[i]
         for j in course_list:
             if i == j:
                 continue
-            cj = all_courses.loc[j]
+            cj = all_courses[j]
             if ci["department"] == cj["department"]:
                 if not set(course_levels[ci["course"]]).isdisjoint(course_levels[cj["course"]]):
                     conflict_map[i].add(j)
@@ -81,7 +82,7 @@ if all([cs_file, ist_file, cyb_file, co_file]) and generate_btn:
 
     timetable = []
     for idx, slot in best.assignments.items():
-        row = all_courses.loc[idx]
+        row = all_courses[idx]
         timetable.append({
             "Day": slot[0],
             "Start Time": slot[1],
