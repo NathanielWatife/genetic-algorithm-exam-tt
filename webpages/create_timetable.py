@@ -22,9 +22,11 @@ generate_btn = st.sidebar.button("Generate Timetable")
 
 exam_days = weeks * 5
 
+
 # Helper to check if all files are uploaded
 def all_files_uploaded():
     return all([cs_file, ist_file, cyb_file, co_file])
+
 
 # Regenerate timetable if button is pressed
 if generate_btn and all_files_uploaded():
@@ -133,6 +135,10 @@ if st.session_state.get("generated", False):
     dept_pivoted = st.session_state["dept_pivoted"]
     summary = st.session_state["summary"]
 
+    # Sort days in columns
+    pivoted_sort = sort_days(pivoted.columns)
+    pivoted = pivoted[pivoted_sort]
+
     st.subheader("\U0001F4C4 Download Timetable")
     st.dataframe(pivoted.fillna(""))
     csv = pivoted.to_csv(index=True).encode("utf-8")
@@ -158,6 +164,8 @@ if st.session_state.get("generated", False):
     for dept in sorted(departments):
         st.markdown(f"### 🏛️ {dept} Department")
         pivoted_dept = dept_pivoted[dept]
+        sorted_cols = sort_days(pivoted_dept.columns)
+        pivoted_dept = pivoted_dept[sorted_cols]
         st.dataframe(pivoted_dept.fillna(""))
         csv_dept = pivoted_dept.to_csv(index=True).encode("utf-8")
         st.download_button(
