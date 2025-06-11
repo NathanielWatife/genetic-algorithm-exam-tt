@@ -1,11 +1,37 @@
-import random
 import os
-from concurrent.futures import ThreadPoolExecutor
-import streamlit as st
+import re
 import base64
+import random
+import streamlit as st
+from concurrent.futures import ThreadPoolExecutor
+
+
+def sort_days(cols):
+    """
+    Sorts a list of column names representing days in the format 'Day N' by their numeric value.
+
+    Args:
+        cols (list): List of column names as strings.
+
+    Returns:
+        list: Sorted list of column names by day number.
+    """
+    def day_key(day):
+        m = re.match(r"Day (\d+)", str(day))
+        return int(m.group(1)) if m else float('inf')
+    return sorted(cols, key=day_key)
 
 
 def open_picture(image_name):
+    """
+    Opens an image file from the 'image' directory, encodes it in base64, and returns the encoded string.
+
+    Args:
+        image_name (str): The name of the image file to open.
+
+    Returns:
+        str: The base64-encoded string of the image contents.
+    """
     cwd = os.path.dirname(__file__)
     image_path = os.path.join(cwd, "image", image_name)
     image_path = os.path.abspath(image_path)
