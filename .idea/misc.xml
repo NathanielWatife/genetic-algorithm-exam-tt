@@ -1,10 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="Black">
-    <option name="sdkName" value="Python 3.13 (GAET)" />
+    <option name="sdkName" value="Python 3.13 virtualenv at C:\Users\peter.mbachu\Documents\lookAway\gaet\gaet_venv" />
   </component>
-  <component name="GithubDefaultAccount">
-    <option name="defaultAccountId" value="fa21580f-8204-4b58-b887-dd3e2cee40f0" />
-  </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.13 (GAET)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.13 virtualenv at C:\Users\peter.mbachu\Documents\lookAway\gaet\gaet_venv" project-jdk-type="Python SDK" />
 </project>

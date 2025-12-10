@@ -173,10 +173,10 @@ if st.session_state.get("generated", False):
     pivoted_sort = sort_days(pivoted.columns)
     pivoted = pivoted[pivoted_sort]
 
-    st.subheader("\U0001F4C4 Download Timetable")
+    st.subheader("\U0001F4C4 General Timetable for all departments.")
     st.dataframe(pivoted.fillna(""))
     csv = pivoted.to_csv(index=True).encode("utf-8")
-    st.download_button("Download CSV Timetable", csv, file_name="exam_timetable.csv", mime="text/csv")
+    st.download_button("Download General Timetable for all departments", csv, file_name="exam_timetable.csv", mime="text/csv")
 
     st.subheader("\U0001F4CA Summary Stats")
     st.markdown(f"- Total Courses: **{summary['total_courses']}**")
