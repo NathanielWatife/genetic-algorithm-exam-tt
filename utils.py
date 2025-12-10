@@ -2,20 +2,13 @@ import os
 import re
 import base64
 import random
+from tkinter.ttk import Treeview
+
 import streamlit as st
 from concurrent.futures import ThreadPoolExecutor
 
 
 def sort_days(cols):
-    """
-    Sorts a list of column names representing days in the format 'Day N' by their numeric value.
-
-    Args:
-        cols (list): List of column names as strings.
-
-    Returns:
-        list: Sorted list of column names by day number.
-    """
     def day_key(day):
         m = re.match(r"Day (\d+)", str(day))
         return int(m.group(1)) if m else float('inf')
@@ -23,15 +16,6 @@ def sort_days(cols):
 
 
 def open_picture(image_name):
-    """
-    Opens an image file from the 'image' directory, encodes it in base64, and returns the encoded string.
-
-    Args:
-        image_name (str): The name of the image file to open.
-
-    Returns:
-        str: The base64-encoded string of the image contents.
-    """
     cwd = os.path.dirname(__file__)
     image_path = os.path.join(cwd, "image", image_name)
     image_path = os.path.abspath(image_path)
@@ -41,29 +25,11 @@ def open_picture(image_name):
 
 
 def time_to_minutes(t):
-    """
-        Converts a time string in 'HH:MM' format to the total number of minutes.
-
-        Args:
-            t (str): Time string in 'HH:MM' format.
-
-        Returns:
-            int: Total minutes.
-        """
     h, m = map(int, t.split(":"))
     return h * 60 + m
 
 
 def get_time_slots(units):
-    """
-    Returns a list of available time slots based on the number of units.
-
-    Args:
-        units (int): The number of units for the course.
-
-    Returns:
-        list: A list of tuples, each representing a start and end time in 'HH:MM' format.
-    """
     if units == 1:
         return [("09:00", "10:00"), ("10:15", "11:15"), ("11:30", "12:30"), ("12:45", "13:45"), ("14:00", "15:00"),
                 ("15:15", "16:15")]
@@ -78,52 +44,42 @@ def get_time_slots(units):
 
 
 class Chromosome:
-    """
-    Represents a candidate solution (chromosome) for the timetable scheduling problem.
-
-    Attributes:
-        assignments (dict): Mapping of course indices to assigned time slots.
-        fitness (float or None): Fitness score of the chromosome.
-        hard_conflicts (int): Number of hard conflicts in the timetable.
-        soft_conflicts (int): Number of soft conflicts in the timetable.
-    """
     def __init__(self, assignments):
-        """
-        Initializes a Chromosome instance with course assignments.
-
-        Args:
-            assignments (dict): Mapping of course indices to assigned time slots.
-        """
         self.assignments = assignments
         self.fitness = None
         self.hard_conflicts = 0
         self.soft_conflicts = 0
 
-    def calculate_fitness(self, all_courses, slot_time_cache, course_levels):
-        """
-        Calculates the fitness score for the chromosome based on scheduling constraints.
-
-        Args:
-            all_courses (pd.DataFrame): DataFrame containing all course information.
-            slot_time_cache (dict): Mapping of time slots to their start and end times in minutes.
-            course_levels (dict): Mapping of course names to their levels.
-
-        Returns:
-            float: The calculated fitness score (negative penalty).
-        """
+    def calculate_fitness(self, all_courses, slot_time_cache, course_levels, venue_capacity):
         penalty = 0
         hard_conflicts = 0
         soft_conflicts = 0
         slot_usage = {}
+        venue_usage = {}
 
         for idx, slot in self.assignments.items():
             row = all_courses[idx]
             course = row["course"]
             department = row["department"]
             start_min, end_min = slot_time_cache[slot]
+            venue_id = slot[4]
+
             for level in course_levels[course]:
                 key = (slot[0], level, department)
                 slot_usage.setdefault(key, []).append((start_min, end_min, course))
+
+            # venue booking keys
+            venue_key = (slot[0], venue_id)
+            venue_usage.setdefault(venue_key, []).append((start_min, end_min, course, idx))
+
+            # capacity check
+            enrolled = int(row.get("enrolled", 0) or 0)
+            cap = venue_capacity.get(venue_id, 999999)
+            if enrolled > 0 and 0 < cap < enrolled:
+                # modest penalty for over-capacity (soft conflict)
+                penalty += 1000
+                soft_conflicts += 1
+
 
         for exams in slot_usage.values():
             exams.sort()
@@ -138,6 +94,19 @@ class Chromosome:
                         penalty += 500
                         soft_conflicts += 1
 
+        # venue double-bookings (hard)
+        for bookings in venue_usage.values():
+            bookings.sort()
+            for i in range(len(bookings)):
+                for j in range(i + 1, len(bookings)):
+                    s1, e1, _, _ = bookings[i]
+                    s2, e2, _, _ = bookings[j]
+                    if s1 < e2 and s2 < e1:
+                        penalty += 80000
+                        hard_conflicts += 1
+
+
+
         self.fitness = -penalty
         self.hard_conflicts = hard_conflicts
         self.soft_conflicts = soft_conflicts
@@ -145,19 +114,6 @@ class Chromosome:
 
 
 def is_slot_conflict(idx, slot, assignments, slot_time_cache, conflict_map):
-    """
-    Checks if assigning a given slot to a course index causes a conflict with already assigned courses.
-
-    Args:
-        idx (int): Index of the course to check.
-        slot (tuple): The time slot to assign.
-        assignments (dict): Current assignments of courses to slots.
-        slot_time_cache (dict): Mapping of slots to their start and end times in minutes.
-        conflict_map (dict): Mapping of course indices to conflicting course indices.
-
-    Returns:
-        bool: True if there is a conflict, False otherwise.
-    """
     start_min, end_min = slot_time_cache[slot]
     for j in conflict_map[idx]:
         if j not in assignments:
@@ -171,22 +127,7 @@ def is_slot_conflict(idx, slot, assignments, slot_time_cache, conflict_map):
     return False
 
 
-def generate_initial_population(pop_size, all_courses, slots, slot_time_cache, course_levels, conflict_map, course_list):
-    """
-    Generates the initial population of chromosomes for the genetic algorithm.
-
-    Args:
-        pop_size (int): Number of chromosomes to generate.
-        all_courses (pd.DataFrame): DataFrame containing all course information.
-        slots (list): List of available time slots.
-        slot_time_cache (dict): Mapping of slots to their start and end times in minutes.
-        course_levels (dict): Mapping of course names to their levels.
-        conflict_map (dict): Mapping of course indices to conflicting course indices.
-        course_list (list): List of course indices to schedule.
-
-    Returns:
-        list: List of Chromosome instances representing the initial population.
-    """
+def generate_initial_population(pop_size, all_courses, slots, slot_time_cache, course_levels, conflict_map, course_list, venue_capacity):
     population = []
     for _ in range(pop_size):
         assignments = {}
@@ -210,6 +151,14 @@ def generate_initial_population(pop_size, all_courses, slots, slot_time_cache, c
                             break
                     if not valid:
                         break
+
+                # quick capacity heuristic: skip obviously too-small venues
+                if valid:
+                    venue_id = slot[4]
+                    cap = venue_capacity.get(venue_id, 999999)
+                    enrolled = int(row.get('enrolled', 0) or 0)
+                    if enrolled and cap and enrolled > cap:
+                        valid = False
                 if valid:
                     assignments[idx] = slot
                     for level in course_levels[course]:
@@ -221,67 +170,31 @@ def generate_initial_population(pop_size, all_courses, slots, slot_time_cache, c
                 for slot in possible_slots:
                     if not is_slot_conflict(idx, slot, assignments, slot_time_cache, conflict_map):
                         assignments[idx] = slot
+                        assigned = True
                         break
-                else:
+                # last resort to pick random slots
+                if not assigned and possible_slots:
+                # else:
                     assignments[idx] = random.choice(possible_slots)
         chromo = Chromosome(assignments)
         population.append(chromo)
-    calculate_population_fitness(population, all_courses, slot_time_cache, course_levels)
+    calculate_population_fitness(population, all_courses, slot_time_cache, course_levels, venue_capacity)
     return population
 
 
-def calculate_population_fitness(population, all_courses, slot_time_cache, course_levels):
-    """
-    Calculates the fitness for each chromosome in the population in parallel.
-
-    Args:
-        population (list): List of Chromosome instances.
-        all_courses (pd.DataFrame): DataFrame containing all course information.
-        slot_time_cache (dict): Mapping of slots to their start and end times in minutes.
-        course_levels (dict): Mapping of course names to their levels.
-
-    Returns:
-        None
-    """
+def calculate_population_fitness(population, all_courses, slot_time_cache, course_levels, venue_capacity):
     with ThreadPoolExecutor(max_workers=2) as executor:
-        list(executor.map(lambda c: c.calculate_fitness(all_courses, slot_time_cache, course_levels), population))
+        list(executor.map(lambda c: c.calculate_fitness(all_courses, slot_time_cache, course_levels, venue_capacity), population))
 
 
 def crossover(parent1, parent2, course_list):
-    """
-    Performs crossover between two parent chromosomes to produce a child chromosome.
-
-    Args:
-        parent1 (Chromosome): The first parent chromosome.
-        parent2 (Chromosome): The second parent chromosome.
-        course_list (list): List of course indices to schedule.
-
-    Returns:
-        Chromosome: A new child chromosome with mixed assignments from both parents.
-    """
     assignments = {}
     for idx in course_list:
         assignments[idx] = parent1.assignments[idx] if random.random() < 0.5 else parent2.assignments[idx]
     return Chromosome(assignments)
 
 
-def mutate(chromo, mutation_rate, all_courses, slots, slot_time_cache, course_levels, conflict_map, course_list):
-    """
-    Mutates a chromosome by randomly reassigning time slots to courses based on the mutation rate.
-
-    Args:
-        chromo (Chromosome): The chromosome to mutate.
-        mutation_rate (float): Probability of mutating each course assignment.
-        all_courses (pd.DataFrame): DataFrame containing all course information.
-        slots (list): List of available time slots.
-        slot_time_cache (dict): Mapping of slots to their start and end times in minutes.
-        course_levels (dict): Mapping of course names to their levels.
-        conflict_map (dict): Mapping of course indices to conflicting course indices.
-        course_list (list): List of course indices to schedule.
-
-    Returns:
-        None
-    """
+def mutate(chromo, mutation_rate, all_courses, slots, slot_time_cache, course_levels, conflict_map, course_list, venue_capacity):
     mutated = False
     for idx in course_list:
         if random.random() < mutation_rate:
@@ -291,28 +204,19 @@ def mutate(chromo, mutation_rate, all_courses, slots, slot_time_cache, course_le
             random.shuffle(possible_slots)
             for slot in possible_slots:
                 if not is_slot_conflict(idx, slot, chromo.assignments, slot_time_cache, conflict_map):
+                    venue_id = slot[4]
+                    cap = venue_capacity.get(venue_id, 999999)
+                    enrolled = int(row.get('enrolled', 0) or 0)
+                    if enrolled and cap and enrolled > cap:
+                        continue
                     chromo.assignments[idx] = slot
                     mutated = True
                     break
     if mutated:
-        chromo.calculate_fitness(all_courses, slot_time_cache, course_levels)
+        chromo.calculate_fitness(all_courses, slot_time_cache, course_levels, venue_capacity)
 
 
-def repair(chromo, all_courses, slots, slot_time_cache, course_levels, conflict_map):
-    """
-    Repairs a chromosome by resolving hard conflicts in course assignments.
-
-    Args:
-        chromo (Chromosome): The chromosome to repair.
-        all_courses (pd.DataFrame): DataFrame containing all course information.
-        slots (list): List of available time slots.
-        slot_time_cache (dict): Mapping of slots to their start and end times in minutes.
-        course_levels (dict): Mapping of course names to their levels.
-        conflict_map (dict): Mapping of course indices to conflicting course indices.
-
-    Returns:
-        None
-    """
+def repair(chromo, all_courses, slots, slot_time_cache, course_levels, conflict_map, venue_capacity):
     repaired = False
     for idx, slot in list(chromo.assignments.items()):
         row = all_courses[idx]
@@ -331,33 +235,23 @@ def repair(chromo, all_courses, slots, slot_time_cache, course_levels, conflict_
                 random.shuffle(possible_slots)
                 for new_slot in possible_slots:
                     if not is_slot_conflict(idx, new_slot, chromo.assignments, slot_time_cache, conflict_map):
+                        # capacity check for candidate
+                        venue_id = new_slot[4]
+                        cap = venue_capacity.get(venue_id, 999999)
+                        enrolled = int(row.get('enrolled', 0) or 0)
+                        if enrolled and cap and enrolled > cap:
+                            continue
                         chromo.assignments[idx] = new_slot
                         repaired = True
                         break
     if repaired:
-        chromo.calculate_fitness(all_courses, slot_time_cache, course_levels)
+        chromo.calculate_fitness(all_courses, slot_time_cache, course_levels, venue_capacity)
 
 
 def genetic_algorithm(
-        generations, pop_size, all_courses, slots, slot_time_cache, course_levels, conflict_map, course_list, ):
-    """
-    Runs a genetic algorithm to generate an optimized timetable.
-
-    Args:
-        generations (int): Number of generations to run the algorithm.
-        pop_size (int): Size of the population in each generation.
-        all_courses (pd.DataFrame): DataFrame containing course information.
-        slots (list): List of available time slots.
-        slot_time_cache (dict): Mapping of slots to their start and end times in minutes.
-        course_levels (dict): Mapping of course names to their levels.
-        conflict_map (dict): Mapping of course indices to conflicting course indices.
-        course_list (list): List of course indices to schedule.
-
-    Returns:
-        Chromosome: The best chromosome (timetable) found.
-    """
+        generations, pop_size, all_courses, slots, slot_time_cache, course_levels, conflict_map, course_list, venue_capacity):
     population = generate_initial_population(
-        pop_size, all_courses, slots, slot_time_cache, course_levels, conflict_map, course_list
+        pop_size, all_courses, slots, slot_time_cache, course_levels, conflict_map, course_list, venue_capacity
     )
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -368,10 +262,10 @@ def genetic_algorithm(
         while len(next_gen) < pop_size:
             p1, p2 = random.choices(population[:20], k=2)
             child = crossover(p1, p2, course_list)
-            mutate(child, mutation_rate, all_courses, slots, slot_time_cache, course_levels, conflict_map, course_list)
-            repair(child, all_courses, slots, slot_time_cache, course_levels, conflict_map)
+            mutate(child, mutation_rate, all_courses, slots, slot_time_cache, course_levels, conflict_map, course_list, venue_capacity)
+            repair(child, all_courses, slots, slot_time_cache, course_levels, conflict_map, venue_capacity)
             if child.fitness is None:
-                child.calculate_fitness(all_courses, slot_time_cache, course_levels)
+                child.calculate_fitness(all_courses, slot_time_cache, course_levels, venue_capacity)
             next_gen.append(child)
         population = next_gen
         progress_bar.progress((gen + 1) / generations)

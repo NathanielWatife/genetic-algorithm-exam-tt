@@ -1,0 +1,10 @@
+venue_id,venue_name,capacity
+V001,Main Hall A,500
+V002,Auditorium A,300
+V003,Room 101,200
+V001,Main Hall B,150
+V002,Auditorium B,200
+V003,Room 102,300
+V001,Main Hall C,110
+V002,Auditorium C,200
+V003,Room 103,100
