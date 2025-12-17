@@ -6,7 +6,7 @@ st.set_page_config(page_title="Exam Timetable Generator - Home",
                    layout="wide")
 
 st.markdown(f"""
-<img src="data:image/jpeg;base64,{open_picture('noun (2).png')}" width="20%"><br>
+<img src="data:image/jpeg;base64,{open_picture('Yabatech.jpg')}" width="20%"><br>
 """, unsafe_allow_html=True)
 
 st.header("Welcome to the Exam Timetable Generator")
