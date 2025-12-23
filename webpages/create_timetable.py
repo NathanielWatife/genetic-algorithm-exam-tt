@@ -20,10 +20,11 @@ co_file = st.sidebar.file_uploader("Upload Carryover Courses CSV", type="csv")
 # Upload venue csv data
 venue_file = st.sidebar.file_uploader("Upload Venue Lists CSV", type="csv")
 
-weeks = st.sidebar.selectbox("Number of exam weeks (Mon–Fri)", [1, 2, 3], index=0)
+weeks = st.sidebar.number_input("Number of exam weeks (Mon–Fri)", min_value=1, max_value=5, step=1, value=1)
 
 # Selects number of venues
-venues = st.sidebar.selectbox("How many venues for the exam", [1, 2, 3, 4], index=0)
+venues = st.sidebar.number_input("How many venues for the exam", min_value=1, max_value=6, step=1, value=2)
+
 generate_btn = st.sidebar.button("Generate Timetable")
 
 exam_days = weeks * 5
