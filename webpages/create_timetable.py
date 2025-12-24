@@ -13,8 +13,8 @@ st.title("\U0001F4D8 Exam Timetable Generator")
 
 st.sidebar.header("Upload Department CSVs")
 cs_file = st.sidebar.file_uploader("Upload Computer Science CSV", type="csv")
-ist_file = st.sidebar.file_uploader("Upload Information and System Technology CSV", type="csv")
-cyb_file = st.sidebar.file_uploader("Upload Cyber Security CSV", type="csv")
+ist_file = st.sidebar.file_uploader("Upload Agricultural Technology CSV", type="csv")
+cyb_file = st.sidebar.file_uploader("Upload Food Technology CSV", type="csv")
 co_file = st.sidebar.file_uploader("Upload Carryover Courses CSV", type="csv")
 
 # Upload venue csv data
