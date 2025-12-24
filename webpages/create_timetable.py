@@ -19,7 +19,7 @@ st.sidebar.header("📂 Departments")
 # initialize session state and store departments in upload
 if "departments" not in st.session_state:
     st.session_state.departments = []  # list of dicts: {name, file}
-fera
+
 # Button to add department
 if st.sidebar.button("➕ Add Department"):
     st.session_state.departments.append({
