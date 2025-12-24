@@ -1,20 +1,60 @@
 import pandas as pd
 from utils import *
 
+
 st.set_page_config(page_title="Exam Timetable Generator",
                    page_icon="\U0001F4D8",
                    layout="wide")
 
+# -------------------- HEADER ----------------
 st.markdown(f"""
-<img src="data:image/jpeg;base64,{open_picture('noun (2).png')}" width="10%"><br>
+<img src="data:image/jpeg;base64,{open_picture('Yabatech.jpg')}" width="10%"><br>
 """, unsafe_allow_html=True)
 
 st.title("\U0001F4D8 Exam Timetable Generator")
 
-st.sidebar.header("Upload Department CSVs")
-cs_file = st.sidebar.file_uploader("Upload Computer Science CSV", type="csv")
-ist_file = st.sidebar.file_uploader("Upload Agricultural Technology CSV", type="csv")
-cyb_file = st.sidebar.file_uploader("Upload Food Technology CSV", type="csv")
+# ----------- SIDEBAR ---------------
+st.sidebar.header("📂 Departments")
+
+# initialize session state and store departments in upload
+if "departments" not in st.session_state:
+    st.session_state.departments = []  # list of dicts: {name, file}
+fera
+# Button to add department
+if st.sidebar.button("➕ Add Department"):
+    st.session_state.departments.append({
+        "name": f"Dept {len(st.session_state.departments) + 1}",
+        "file": None
+    })
+
+all_dept_files = []
+# Render department inputs
+for i, dept in enumerate(st.session_state.departments):
+    st.sidebar.markdown(f"**Department {i + 1}**")
+    dept_name = st.sidebar.text_input(
+        f"Department Name {i+1}",
+        value=dept["name"],
+        key=f"dept_name_{i}"
+    )
+
+    dept_file = st.sidebar.file_uploader(
+        f"Upload {dept_name} CSV",
+        type="csv",
+        key=f"dept_file_{i}"
+    )
+
+    st.session_state.departments[i]["name"] = dept_name
+    st.session_state.departments[i]["file"] = dept_file
+
+    if dept_file:
+        all_dept_files.append(dept_file)
+
+    # st.sidebar.divider()
+
+# carryover + venues
+st.sidebar.header("📦 Other Uploads")
+
+# upload carryover course
 co_file = st.sidebar.file_uploader("Upload Carryover Courses CSV", type="csv")
 
 # Upload venue csv data
@@ -29,26 +69,51 @@ generate_btn = st.sidebar.button("Generate Timetable")
 
 exam_days = weeks * 5
 
-
-# Helper to check if all files are uploaded
+# -- VALIDATION ----------
 def all_files_uploaded():
-    return all([cs_file, ist_file, cyb_file, co_file, venue_file])
+    return (
+        len(all_dept_files) > 0
+        and co_file
+        and venue_file
+    )
 
 
+# -------------------- RUN GA --------------------
 # Regenerate timetable if button is pressed
 if generate_btn and all_files_uploaded():
-    cs_df = pd.read_csv(cs_file)
-    ist_df = pd.read_csv(ist_file)
-    cyb_df = pd.read_csv(cyb_file)
-    co_df = pd.read_csv(co_file)
-    venues_df = pd.read_csv(venue_file)
+    department_dfs = []
+    for item in st.session_state.departments:
+        if item["file"]:
+            df = pd.read_csv(item["file"])
+            df["department"] = item["name"]  # enforce consistency
+            department_dfs.append(df)
 
-    all_courses_df = pd.concat([cs_df, ist_df, cyb_df], ignore_index=True)
+    all_courses_df = pd.concat(department_dfs, ignore_index=True)
+
+    # standardize data
     all_courses_df["units"] = all_courses_df["units"].astype(int)
     all_courses_df["course"] = all_courses_df["course"].str.strip().str.lower()
+    all_courses_df["department"] = all_courses_df["department"].str.strip()
     all_courses_df = all_courses_df.reset_index(drop=True)
+
     all_courses = all_courses_df.to_dict(orient="records")
     course_list = list(range(len(all_courses)))
+
+    # ----- LOAD CARRYOVER ----------
+    co_df = pd.read_csv(co_file)
+    LEVELS = [100, 200, 300, 400]
+    co_courses = set(co_df[co_df["is_carryover"] == True]["course"].str.strip().str.lower())
+    course_levels = {}
+    for idx, row in enumerate(all_courses):
+        course = row["course"]
+        level = int(row["level"])
+        levels = [level]
+        if course in co_courses:
+            levels += [i for i in LEVELS if i > level]
+        course_levels[course] = levels
+
+    # ------- VENUE LOADING -----------
+    venues_df = pd.read_csv(venue_file)
 
     # venue mapping
     venues_list = venues_df.to_dict(orient='records')
@@ -63,7 +128,7 @@ if generate_btn and all_files_uploaded():
     for v in venues_list:
         st.sidebar.markdown(f"- {v.get('venue_name', v['venue_id'])} (ID: {v['venue_id']}, cap: {v['capacity']})")
 
-
+    # ----UNIQUE TIME SLOTS ----------
     unique_units = sorted(set(row["units"] for row in all_courses))
     slot_cache = {u: get_time_slots(u) for u in unique_units}
 
@@ -79,17 +144,7 @@ if generate_btn and all_files_uploaded():
                         slots.append(slot)
                         slot_time_cache[slot] = (time_to_minutes(start), time_to_minutes(end))
 
-    LEVELS = [100, 200, 300, 400]
-    co_courses = set(co_df[co_df["is_carryover"] == True]["course"].str.strip().str.lower())
-    course_levels = {}
-    for idx, row in enumerate(all_courses):
-        course = row["course"]
-        level = int(row["level"])
-        levels = [level]
-        if course in co_courses:
-            levels += [i for i in LEVELS if i > level]
-        course_levels[course] = levels
-
+    # ---- CONFLICT MAPPING ------
     conflict_map = {i: set() for i in course_list}
     for i in course_list:
         ci = all_courses[i]
@@ -122,8 +177,8 @@ if generate_btn and all_files_uploaded():
             "Start Time": slot[1],
             "End Time": slot[2],
             "Course": row["course"].upper(),
-            "Level": row["level"],
             "Department": row["department"],
+            "Level": row["level"],
             "Units": row["units"],
             "Venue ID": venue_id,
             "Venue": venue_name.get(venue_id, venue_id),
@@ -132,7 +187,10 @@ if generate_btn and all_files_uploaded():
 
         })
     timetable_df = pd.DataFrame(timetable)
+    st.session_state["timetable_df"] = timetable_df
+    st.session_state["generated"] = True
 
+    # -- DISPLAY -----------------
     pivot_table = timetable_df.copy()
     pivot_table["Slot"] = pivot_table["Start Time"] + "-" + pivot_table["End Time"]
     # pivot_table["Info"] = pivot_table["Course"] + " (" + pivot_table["Department"] + ", Lvl " + pivot_table["Level"].astype(str) + ")"
@@ -141,7 +199,6 @@ if generate_btn and all_files_uploaded():
     pivoted = pivot_table.pivot_table(index="Slot", columns="Day", values="Info", aggfunc=lambda x: '\n'.join(x))
 
     # Store in session state
-    st.session_state["timetable_df"] = timetable_df
     st.session_state["pivoted"] = pivoted
     st.session_state["departments"] = timetable_df["Department"].unique()
     st.session_state["dept_pivoted"] = {
@@ -160,7 +217,6 @@ if generate_btn and all_files_uploaded():
         "hard_conflicts": best.hard_conflicts,
         "soft_conflicts": best.soft_conflicts
     }
-    st.session_state["generated"] = True
 
 # Display timetable if generated
 if st.session_state.get("generated", False):
@@ -211,3 +267,5 @@ if st.session_state.get("generated", False):
         )
 else:
     st.info("Upload all required CSVs and click **Generate Timetable** to begin.")
+
+
