@@ -101,15 +101,21 @@ if generate_btn and all_files_uploaded():
 
     # ----- LOAD CARRYOVER ----------
     co_df = pd.read_csv(co_file)
-    LEVELS = [100, 200, 300, 400]
+
+    LEVELS = ["ND1", "ND2", "HND1", "HND2"]
+    LEVEL_ORDER = {level: idx for idx, level in enumerate(LEVELS)}
+
     co_courses = set(co_df[co_df["is_carryover"] == True]["course"].str.strip().str.lower())
     course_levels = {}
-    for idx, row in enumerate(all_courses):
+    for row in all_courses:
         course = row["course"]
-        level = int(row["level"])
+        level = str(row["level"]).strip()
+
+        base_idx = LEVEL_ORDER[level]
         levels = [level]
         if course in co_courses:
-            levels += [i for i in LEVELS if i > level]
+            # levels += [i for i in LEVELS if i > level]
+            levels += LEVELS[base_idx + 1:]
         course_levels[course] = levels
 
     # ------- VENUE LOADING -----------
@@ -194,18 +200,19 @@ if generate_btn and all_files_uploaded():
     pivot_table = timetable_df.copy()
     pivot_table["Slot"] = pivot_table["Start Time"] + "-" + pivot_table["End Time"]
     # pivot_table["Info"] = pivot_table["Course"] + " (" + pivot_table["Department"] + ", Lvl " + pivot_table["Level"].astype(str) + ")"
-    pivot_table["Info"] = pivot_table["Course"] + " (" + pivot_table["Department"] + ", Lvl " + pivot_table["Level"].astype(str) + ", " + pivot_table["Venue"] + ")"
+    pivot_table["Info"] = pivot_table["Course"] + " (" + pivot_table["Department"] + ", " + pivot_table["Level"].astype(str) + ", " + pivot_table["Venue"] + ")"
 
     pivoted = pivot_table.pivot_table(index="Slot", columns="Day", values="Info", aggfunc=lambda x: '\n'.join(x))
 
     # Store in session state
     st.session_state["pivoted"] = pivoted
-    st.session_state["departments"] = timetable_df["Department"].unique()
+    # st.session_state["departments"] = timetable_df["Department"].unique()
+    st.session_state["timetable_departments"] = timetable_df["Department"].unique()
     st.session_state["dept_pivoted"] = {
         dept: timetable_df[timetable_df["Department"] == dept]
         .assign(Slot=lambda df: df["Start Time"] + "-" + df["End Time"])
         # .assign(Info=lambda df: df["Course"] + " (Lvl " + df["Level"].astype(str) + ")")
-        .assign(Info=lambda df: df["Course"] + " (Lvl " + df["Level"].astype(str) + ", " + df["Venue"] + ")")
+        .assign(Info=lambda df: df["Course"] + " ( " + df["Level"].astype(str) + ", " + df["Venue"] + ")")
         .pivot_table(index="Slot", columns="Day", values="Info", aggfunc=lambda x: "\n".join(x))
         for dept in timetable_df["Department"].unique()
     }
@@ -222,7 +229,7 @@ if generate_btn and all_files_uploaded():
 if st.session_state.get("generated", False):
     timetable_df = st.session_state["timetable_df"]
     pivoted = st.session_state["pivoted"]
-    departments = st.session_state["departments"]
+    departments = st.session_state["timetable_departments"]
     dept_pivoted = st.session_state["dept_pivoted"]
     summary = st.session_state["summary"]
 
