@@ -45,7 +45,7 @@ with well defined constraint categories.
 
 ### 🚀 Getting Started
 
-- Use the sidebar to upload all required CSV files (Computer Science, Information and System Technology, Cyber Security,
+- Use the sidebar to upload all required CSV files (Departments,
 Carryover Courses and Venue)
 - Select the number of exam weeks
 - Select the number of venue available
