@@ -63,7 +63,7 @@ venue_file = st.sidebar.file_uploader("Upload Venue Lists CSV", type="csv")
 weeks = st.sidebar.number_input("Number of exam weeks (Mon–Fri)", min_value=1, max_value=5, step=1, value=1)
 
 # Selects number of venues
-venues = st.sidebar.number_input("How many venues for the exam", min_value=1, max_value=6, step=1, value=2)
+venues = st.sidebar.number_input("How many venues for the exam", min_value=1, max_value=10, step=1, value=2)
 
 generate_btn = st.sidebar.button("Generate Timetable")
 
