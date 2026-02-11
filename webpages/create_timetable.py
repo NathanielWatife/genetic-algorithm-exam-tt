@@ -1,6 +1,7 @@
 import pandas as pd
 from utils import *
 
+st.set_drop_down(page_titlr="Nd 1")
 
 st.set_page_config(page_title="Exam Timetable Generator",
                    page_icon="\U0001F4D8",
