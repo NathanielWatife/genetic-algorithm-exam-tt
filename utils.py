@@ -74,30 +74,22 @@ def time_to_minutes(t: str) -> int:
     return h * 60 + m
 
 
-def get_time_slots(units: int) -> list[tuple[str, str]]:
-    """
-    Return valid exam time slots based on course credit units.
+def get_time_slots(units):
+    start_minutes = 9 * 60
+    end_minutes = 17 * 60 + 45
+    duration = units * 60
+    break_time = 15
 
-    The function defines allowed exam durations and corresponding
-    time slots for different course unit loads.
+    slots = []
+    current = start_minutes
 
-    Args:
-        units (int): Number of credit units for the course.
+    while current + duration <= end_minutes:
+        start = minutes_to_time(current)
+        end = minutes_to_time(current + duration)
+        slots.append((start, end))
+        current += duration + break_time
 
-    Returns:
-        list[tuple[str, str]]: List of (start_time, end_time) tuples.
-    """
-    if units == 1:
-        return [("09:00", "10:00"), ("10:15", "11:15"), ("11:30", "12:30"), ("12:45", "13:45"), ("14:00", "15:00"),
-                ("15:15", "16:15")]
-    elif units == 2:
-        return [("09:00", "11:00"), ("11:15", "13:15"), ("13:30", "15:30"), ("15:45", "17:45")]
-    elif units == 3:
-        return [("09:00", "12:00"), ("12:15", "15:15")]
-    elif units == 4:
-        return [("09:00", "13:00"), ("13:15", "17:15")]
-    else:
-        return []
+    return slots
 
 
 class Chromosome:
