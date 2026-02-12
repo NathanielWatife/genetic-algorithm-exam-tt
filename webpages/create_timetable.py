@@ -78,6 +78,40 @@ def all_files_uploaded():
     )
 
 
+# -------------------- DISPLAY UPLOADED COURSES --------------------
+if all_dept_files:
+    st.subheader("📋 Uploaded Courses Overview")
+    
+    for i, dept in enumerate(st.session_state.departments):
+        if dept["file"]:
+            dept_df = pd.read_csv(dept["file"])
+            dept["file"].seek(0)  # Reset file pointer for later use
+            
+            st.markdown(f"### 🏛️ {dept['name']} Department")
+            
+            # Create a clean display of courses and units
+            if "course" in dept_df.columns and "units" in dept_df.columns:
+                display_df = dept_df[["course", "units"]].copy()
+                display_df.columns = ["Course Code", "Units"]
+                display_df["Course Code"] = display_df["Course Code"].str.upper()
+                
+                # Display as a compact table
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    st.dataframe(
+                        display_df,
+                        use_container_width=True,
+                        hide_index=True,
+                        height=min(len(display_df) * 35 + 38, 300)
+                    )
+                with col2:
+                    st.metric("Total Courses", len(display_df))
+                    st.metric("Total Units", display_df["Units"].sum())
+            else:
+                st.warning(f"⚠️ {dept['name']} CSV missing 'course' or 'units' columns")
+    
+    st.divider()
+
 # -------------------- RUN GA --------------------
 # Regenerate timetable if button is pressed
 if generate_btn and all_files_uploaded():
